@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FAST R1 大模型推理器</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 20px;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+        }
+
+        .app-container {
+            display: flex;
+            gap: 20px;
+            max-width: 1600px;
+            width: 100%;
+            height: calc(100vh - 40px);
+        }
+
+        .sidebar {
+            width: 380px;
+            flex-shrink: 0;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-container {
+            width: 75%;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .sidebar-header {
+            background-color: #007bff;
+            color: white;
+            padding: 15px;
+            text-align: center;
+            font-size: 1.2em;
+        }
+
+        .chat-header {
+            background-color: #007bff;
+            color: white;
+            padding: 15px;
+            text-align: center;
+            font-size: 1.2em;
+        }
+
+        .settings-container {
+            flex: 1;
+            overflow-y: auto;
+            padding-bottom: 20px;
+        }
+
+        .step-header {
+            padding: 10px 20px;
+            background-color: #e9ecef;
+            border-bottom: 1px solid #dee2e6;
+            font-weight: 500;
+            color: #495057;
+        }
+
+        .step-header.disabled {
+            color: #adb5bd;
+            background-color: #f1f3f5;
+        }
+
+        .step-number {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            line-height: 24px;
+            text-align: center;
+            border-radius: 50%;
+            background-color: #007bff;
+            color: white;
+            margin-right: 8px;
+        }
+
+        .step-header.disabled .step-number {
+            background-color: #adb5bd;
+        }
+
+        .api-key-form {
+            padding: 10px 20px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .api-key-input {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-grow: 1;
+        }
+
+        .api-key-input.hidden {
+            display: none;
+        }
+
+        .model-selection-form {
+            padding: 10px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .model-selection-form form {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .model-selection-form button {
+            align-self: flex-start;
+            margin-top: 10px;
+        }
+
+        .model-selection-form.disabled {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        .model-inputs {
+            display: flex;
+            gap: 20px;
+            flex-grow: 1;
+        }
+
+        .model-group {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .model-group label {
+            font-size: 0.9em;
+            color: #495057;
+            margin-bottom: 2px;
+        }
+
+        .model-group select {
+            width: 100%;
+            padding: 8px 15px;
+            border: 1px solid #dee2e6;
+            border-radius: 20px;
+            font-size: 0.9em;
+            appearance: none;
+            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right 1rem center;
+            background-size: 1em;
+        }
+
+        .status-indicator {
+            font-size: 0.9em;
+            color: #6c757d;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            white-space: nowrap;
+            margin-top: 5px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            margin: 0;
+            flex-shrink: 0;
+        }
+
+        .status-dot.configured {
+            background-color: #28a745;
+        }
+
+        .status-dot.not-configured {
+            background-color: #dc3545;
+        }
+
+        .chat-messages {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 添加执行模型消息容器的样式 */
+        .execution-messages-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin: 0 -10px;  /* 抵消padding */
+        }
+
+        /* 执行模型消息的样式 */
+        .message.execution-message {
+            flex: 1;
+            min-width: calc(33.333% - 20px);  /* 三列布局，减去间距 */
+            max-width: calc(33.333% - 20px);
+            margin: 0;
+        }
+
+        .message-content {
+            max-width: 100%;  /* 修改最大宽度为100% */
+            padding: 12px 16px;
+            border-radius: 15px;
+            margin: 5px 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .user-message {
+            align-items: flex-end;
+        }
+
+        .user-message .message-content {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .assistant-message {
+            align-items: flex-start;
+        }
+
+        .assistant-message .message-content {
+            background-color: #e9ecef;
+            color: #333;
+        }
+
+        .chat-input {
+            padding: 20px;
+            background-color: white;
+            border-top: 1px solid #dee2e6;
+        }
+
+        form {
+            display: flex;
+            gap: 10px;
+        }
+
+        input[type="text"],
+        input[type="password"] {
+            flex-grow: 1;
+            padding: 10px 15px;
+            border: 1px solid #dee2e6;
+            border-radius: 20px;
+            font-size: 1em;
+            outline: none;
+        }
+
+        input[type="text"]:focus,
+        input[type="password"]:focus,
+        select:focus {
+            border-color: #007bff;
+            outline: none;
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: background-color 0.2s;
+            white-space: nowrap;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        .message-role {
+            font-size: 0.8em;
+            color: #6c757d;
+            margin-bottom: 4px;
+        }
+
+        /* AI标签样式 */
+        .message-role .ai-tag {
+            display: inline-block;
+            background-color: #007bff;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            margin-left: 4px;
+            font-weight: 500;
+        }
+
+        .model-inputs.hidden,
+        .selected-models.hidden {
+            display: none;
+        }
+
+        .selected-models {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 10px 0;
+            margin-bottom: 10px;
+        }
+
+        .selected-model-item {
+            font-size: 0.9em;
+            color: #495057;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            padding: 5px 0;
+        }
+
+        .selected-model-item span {
+            color: #007bff;
+            font-weight: 500;
+            word-break: break-all;
+        }
+
+        .markdown-body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            font-size: 16px;
+            line-height: 1.5;
+            word-wrap: break-word;
+        }
+
+        .markdown-body h1,
+        .markdown-body h2,
+        .markdown-body h3,
+        .markdown-body h4,
+        .markdown-body h5,
+        .markdown-body h6 {
+            margin-top: 16px;
+            margin-bottom: 12px;
+            font-weight: 600;
+            line-height: 1.25;
+        }
+
+        .markdown-body h1 { font-size: 1.8em; }
+        .markdown-body h2 { font-size: 1.4em; }
+        .markdown-body h3 { font-size: 1.2em; }
+
+        .markdown-body p {
+            margin-top: 0;
+            margin-bottom: 8px;
+        }
+
+        .markdown-body ul,
+        .markdown-body ol {
+            padding-left: 1.5em;
+            margin-top: 0;
+            margin-bottom: 8px;
+        }
+
+        .markdown-body li {
+            margin-top: 0.15em;
+            margin-bottom: 0.15em;
+        }
+
+        .markdown-body blockquote {
+            padding: 0.5em 1em;
+            color: #6a737d;
+            border-left: 0.25em solid #dfe2e5;
+            margin: 0 0 8px 0;
+        }
+
+        .message-content.markdown-body {
+            line-height: 1.4;
+        }
+
+        .message-content.markdown-body p:last-child {
+            margin-bottom: 0;
+        }
+
+        .markdown-body code {
+            padding: 0.2em 0.4em;
+            margin: 0;
+            font-size: 85%;
+            background-color: rgba(27, 31, 35, 0.05);
+            border-radius: 6px;
+            font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
+        }
+
+        .markdown-body pre {
+            padding: 16px;
+            overflow: auto;
+            font-size: 85%;
+            line-height: 1.45;
+            background-color: #f6f8fa;
+            border-radius: 6px;
+        }
+
+        .markdown-body pre code {
+            padding: 0;
+            margin: 0;
+            font-size: 100%;
+            word-break: normal;
+            white-space: pre;
+            background: transparent;
+            border: 0;
+        }
+
+        /* JSON格式显示样式 */
+        .json-block {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
+        }
+
+        .json-block pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .json-key {
+            color: #e83e8c;
+        }
+
+        .json-string {
+            color: #28a745;
+        }
+
+        .json-number {
+            color: #007bff;
+        }
+
+        .system-prompt-form {
+            padding: 10px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .system-prompt-form.disabled {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        .system-prompt-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .system-prompt-group label {
+            font-size: 0.9em;
+            color: #495057;
+            font-weight: 500;
+        }
+
+        .system-prompt-group textarea {
+            width: 100%;
+            min-height: 200px;
+            padding: 10px;
+            border: 1px solid #dee2e6;
+            border-radius: 10px;
+            font-size: 0.9em;
+            resize: vertical;
+            font-family: inherit;
+            line-height: 1.4;
+        }
+
+        .system-prompt-group textarea:focus {
+            border-color: #007bff;
+            outline: none;
+        }
+
+        .system-prompt-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .system-prompt-actions button {
+            padding: 6px 12px;
+            font-size: 0.9em;
+        }
+
+        .system-prompt-actions button.reset {
+            background-color: #6c757d;
+        }
+
+        .system-prompt-actions button.reset:hover {
+            background-color: #5a6268;
+        }
+
+        /* 为推理模型的文本框单独设置更大的高度 */
+        #inference_prompt {
+            min-height: 300px;
+        }
+    </style>
+    <!-- 添加 marked.js 库 -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- 添加 highlight.js 库用于代码高亮 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.7.0/styles/github.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.7.0/lib/highlight.min.js"></script>
+    <!-- 配置 marked 和 highlight.js -->
+    <script>
+        marked.setOptions({
+            highlight: function(code, lang) {
+                if (lang && hljs.getLanguage(lang)) {
+                    return hljs.highlight(code, { language: lang }).value;
+                }
+                return hljs.highlightAuto(code).value;
+            },
+            breaks: true,
+            gfm: true
+        });
+    </script>
+</head>
+<body>
+    <div class="app-container">
+        <div class="sidebar">
+            <div class="sidebar-header">
+                设置
+            </div>
+            <div class="settings-container">
+                <div class="step-header">
+                    <span class="step-number">1</span>
+                    配置 API 密钥
+                </div>
+                <div class="api-key-form">
+                    <div class="api-key-input {% if api_key_set %}hidden{% endif %}">
+                        <form id="apiKeyForm" onsubmit="submitApiKey(event)" style="flex-grow: 1;">
+                            <input type="password" name="api_key_input" placeholder="输入 SiliconFlow API 密钥..." required>
+                            <button type="submit">设置密钥</button>
+                        </form>
+                    </div>
+                    <form id="changeKeyForm" style="{% if not api_key_set %}display: none;{% endif %}">
+                        <input type="password" name="api_key_input" placeholder="输入新的 API 密钥..." style="display: none;">
+                        <button type="button" onclick="showKeyInput(this)">更改密钥</button>
+                    </form>
+                    <div class="status-indicator">
+                        <span class="status-dot {{ 'configured' if api_key_verified else 'not-configured' }}"></span>
+                        {{ "已验证" if api_key_verified else "未验证" }}
+                    </div>
+                </div>
+                <div class="step-header {% if not api_key_verified %}disabled{% endif %}">
+                    <span class="step-number">2</span>
+                    选择模型
+                </div>
+                <div class="model-selection-form {% if not api_key_verified %}disabled{% endif %}">
+                    <form id="modelForm" onsubmit="submitModelSelection(event)" style="flex-grow: 1;">
+                        <div class="model-inputs {% if inference_model and execution_model %}hidden{% endif %}">
+                            <div class="model-group">
+                                <label for="inference_model">推理模型：</label>
+                                <select name="inference_model" id="inference_model" required {% if not api_key_verified %}disabled{% endif %}>
+                                    <option value="">选择推理模型...</option>
+                                    {% for model in available_models %}
+                                    <option value="{{ model.id }}" {% if model.id == inference_model %}selected{% endif %}>
+                                        {{ model.id }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="model-group">
+                                <label for="execution_model">执行模型：</label>
+                                <select name="execution_model" id="execution_model" required {% if not api_key_verified %}disabled{% endif %}>
+                                    <option value="">选择执行模型...</option>
+                                    {% for model in available_models %}
+                                    <option value="{{ model.id }}" {% if model.id == execution_model %}selected{% endif %}>
+                                        {{ model.id }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="selected-models {% if not (inference_model and execution_model) %}hidden{% endif %}">
+                            <div class="selected-model-item">推理模型：<span>{{ inference_model }}</span></div>
+                            <div class="selected-model-item">执行模型：<span>{{ execution_model }}</span></div>
+                        </div>
+                        {% if inference_model and execution_model %}
+                            <button type="button" onclick="showModelSelection(this)">修改模型</button>
+                        {% else %}
+                            <button type="submit" {% if not api_key_verified %}disabled{% endif %}>确认选择</button>
+                        {% endif %}
+                    </form>
+                </div>
+                <div class="step-header {% if not (inference_model and execution_model) %}disabled{% endif %}">
+                    <span class="step-number">3</span>
+                    系统提示语微调
+                </div>
+                <div class="system-prompt-form {% if not (inference_model and execution_model) %}disabled{% endif %}">
+                    <div class="system-prompt-group">
+                        <label>推理模型提示语：</label>
+                        <textarea id="inference_prompt" placeholder="输入推理模型的系统提示语...">用户将提出问题，您需要给出完整的逻辑思维，并将工作内容和完成工作所需的信息分配给多个人工智能实际执行，可分配的 AI 数量最多 5 个。输出将采用 JSON 格式。
+
+
+                            JSON 输出示例（仅为格式示例，不包括内容）：
+                            {
+                                "AIcount": "3"
+                                "AI1": " 请根据要求生成方向盘，你需要了解方向盘的结构和材料，方向盘的材质是 ABS 塑料...."
+                                "AI2": "请根据要求生成发动机，你需要了解发动机的结构和材料，发动机的材质是铝合金...."
+                                "AI3": "请总结概括多个方案的技术优劣，你需要总结每个方案的技术优劣，并给出最终的结论"
+                            }</textarea>
+                        <div class="system-prompt-actions">
+                            <button type="button" onclick="savePrompt('inference')">保存</button>
+                            <button type="button" class="reset" onclick="resetPrompt('inference')">重置</button>
+                        </div>
+                    </div>
+                    <div class="system-prompt-group">
+                        <label>执行模型提示语：</label>
+                        <textarea id="execution_prompt" placeholder="输入执行模型的系统提示语...">你根据当前的回答和推理逻辑进行实际执行，比如生成代码</textarea>
+                        <div class="system-prompt-actions">
+                            <button type="button" onclick="savePrompt('execution')">保存</button>
+                            <button type="button" class="reset" onclick="resetPrompt('execution')">重置</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="chat-container">
+            <div class="chat-header">
+                FAST R1 大模型推理器
+            </div>
+            <div class="chat-messages">
+                {% for message in messages %}
+                <div class="message {% if message.role == 'user' %}user-message{% else %}assistant-message{% endif %}">
+                    <div class="message-role">{{ message.role|title }}</div>
+                    <div class="message-content">{{ message.content }}</div>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="chat-input">
+                <form id="chatForm" onsubmit="submitChat(event)">
+                    <input type="text" name="message" placeholder="输入您的消息..." required {% if not (api_key_verified and inference_model and execution_model) %}disabled{% endif %}>
+                    <button type="submit" {% if not (api_key_verified and inference_model and execution_model) %}disabled{% endif %}>发送</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <script>
+        // 自动滚动到最新消息
+        function scrollToBottom() {
+            var chatMessages = document.querySelector('.chat-messages');
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        window.onload = scrollToBottom;
+
+        // 显示密钥输入框
+        function showKeyInput(button) {
+            const apiKeyInput = document.querySelector('.api-key-input');
+            apiKeyInput.classList.remove('hidden');
+            button.parentElement.style.display = 'none';
+        }
+
+        // 在JavaScript部分添加一个新的辅助函数
+        function formatModelName(modelName) {
+            if (modelName && modelName.includes('AI')) {
+                const modelNameParts = modelName.split('(');
+                if (modelNameParts.length === 2) {
+                    const name = modelNameParts[0].trim();
+                    const aiNumber = modelNameParts[1].replace(')', '').trim();
+                    return `${name}<span class="ai-tag">${aiNumber}</span>`;
+                }
+            }
+            return modelName;
+        }
+
+        // 修改appendMessage函数中的相关部分
+        function appendMessage(message, append = true, skipMarkdown = false) {
+            const chatMessages = document.querySelector('.chat-messages');
+            
+            // 如果是执行模型的消息，检查是否需要创建容器
+            if (message.role === 'model' && message.modelName && message.modelName.includes('AI')) {
+                let container = chatMessages.querySelector('.execution-messages-container');
+                if (!container) {
+                    container = document.createElement('div');
+                    container.className = 'execution-messages-container';
+                    chatMessages.appendChild(container);
+                }
+                
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message execution-message ${message.role === 'user' ? 'user-message' : 'assistant-message'}`;
+                
+                const roleDiv = document.createElement('div');
+                roleDiv.className = 'message-role';
+                roleDiv.innerHTML = formatModelName(message.modelName);
+                
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'message-content markdown-body';
+                
+                let content = message.content || '';
+                content = processContent(content);
+                
+                if (message.role === 'user' || skipMarkdown) {
+                    contentDiv.textContent = content;
+                } else {
+                    contentDiv.innerHTML = marked.parse(content);
+                }
+                
+                messageDiv.appendChild(roleDiv);
+                messageDiv.appendChild(contentDiv);
+                
+                if (append) {
+                    container.appendChild(messageDiv);
+                } else {
+                    const lastMessage = Array.from(container.querySelectorAll('.execution-message')).pop();
+                    if (lastMessage) {
+                        lastMessage.replaceWith(messageDiv);
+                    } else {
+                        container.appendChild(messageDiv);
+                    }
+                }
+                
+                return contentDiv;
+            } else {
+                // 普通消息的处理
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${message.role === 'user' ? 'user-message' : 'assistant-message'}`;
+                
+                const roleDiv = document.createElement('div');
+                roleDiv.className = 'message-role';
+                
+                if (message.role === 'user') {
+                    roleDiv.textContent = 'User';
+                } else if (message.role === 'model') {
+                    roleDiv.innerHTML = formatModelName(message.modelName);
+                } else {
+                    roleDiv.textContent = 'System';
+                }
+                
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'message-content markdown-body';
+                
+                let content = message.content || '';
+                content = processContent(content);
+                
+                if (message.role === 'user' || skipMarkdown) {
+                    contentDiv.textContent = content;
+                } else {
+                    contentDiv.innerHTML = marked.parse(content);
+                }
+                
+                messageDiv.appendChild(roleDiv);
+                messageDiv.appendChild(contentDiv);
+                
+                if (append) {
+                    chatMessages.appendChild(messageDiv);
+                } else {
+                    const lastMessage = Array.from(chatMessages.querySelectorAll('.message:not(.execution-message)')).pop();
+                    if (lastMessage) {
+                        lastMessage.replaceWith(messageDiv);
+                    } else {
+                        chatMessages.appendChild(messageDiv);
+                    }
+                }
+                
+                return contentDiv;
+            }
+            
+            scrollToBottom();
+        }
+
+        // 处理流式响应中的空行
+        function processContent(content) {
+            return content
+                .replace(/\n\s*\n/g, '\n')
+                .replace(/^\s*[\r\n]/gm, '')
+                .replace(/\s+$/gm, '')
+                .replace(/^\s*[\r\n]+|[\r\n]+\s*$/g, '')
+                .replace(/\n{2,}/g, '\n');
+        }
+
+        // 格式化JSON
+        function formatJSON(jsonStr) {
+            try {
+                // 提取JSON部分
+                let jsonContent = jsonStr;
+                if (jsonStr.includes('{')) {
+                    const start = jsonStr.indexOf('{');
+                    const end = jsonStr.lastIndexOf('}') + 1;
+                    jsonContent = jsonStr.substring(start, end);
+                }
+
+                // 格式化JSON
+                const obj = JSON.parse(jsonContent);
+                const formatted = JSON.stringify(obj, null, 4);
+                
+                // 添加语法高亮
+                const highlighted = formatted.replace(
+                    /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+                    function (match) {
+                        let cls = 'json-number';
+                        if (/^"/.test(match)) {
+                            if (/:$/.test(match)) {
+                                cls = 'json-key';
+                            } else {
+                                cls = 'json-string';
+                            }
+                        }
+                        return '<span class="' + cls + '">' + match + '</span>';
+                    }
+                );
+
+                return `<div class="json-block"><pre>${highlighted}</pre></div>`;
+            } catch (e) {
+                return jsonStr;
+            }
+        }
+
+        // 修改推理模型内容显示的处理
+        function processInferenceContent(content, reasoningContent) {
+            let displayContent = content || '';
+            // 检查是否包含JSON格式
+            if (displayContent.includes('{') && displayContent.includes('}')) {
+                const parts = displayContent.split('{');
+                const preText = parts[0];
+                const jsonPart = '{' + parts.slice(1).join('{');
+                displayContent = `${preText}${formatJSON(jsonPart)}`;
+            }
+            
+            return `回复：${displayContent}\n\n推理过程：${reasoningContent || ''}`;
+        }
+
+        // 默认的系统提示语
+        const DEFAULT_PROMPTS = {
+            inference: "你是一个专业的代码分析助手，需要仔细分析用户的问题和需求，运用逻辑推理能力，先进行假设和推演，然后再给出详细的解决方案。请确保你的推理过程清晰，结论准确。",
+            execution: "你根据以下内容进行执行"
+        };
+
+        // 记录原始提示语
+        let originalPrompts = {
+            inference: "",
+            execution: ""
+        };
+
+        // 页面加载时保存原始提示语
+        window.addEventListener('load', function() {
+            originalPrompts.inference = document.getElementById('inference_prompt').value;
+            originalPrompts.execution = document.getElementById('execution_prompt').value;
+            // 初始时隐藏所有保存按钮
+            document.querySelectorAll('.system-prompt-actions button:not(.reset)').forEach(btn => {
+                btn.style.display = 'none';
+            });
+        });
+
+        // 检查文本是否被修改
+        function checkPromptModified(type) {
+            const textarea = document.getElementById(`${type}_prompt`);
+            const saveButton = textarea.parentElement.querySelector('.system-prompt-actions button:not(.reset)');
+            const isModified = textarea.value.trim() !== originalPrompts[type].trim();
+            saveButton.style.display = isModified ? 'block' : 'none';
+        }
+
+        // 添加文本修改监听
+        document.getElementById('inference_prompt').addEventListener('input', () => checkPromptModified('inference'));
+        document.getElementById('execution_prompt').addEventListener('input', () => checkPromptModified('execution'));
+
+        // 保存系统提示语
+        async function savePrompt(type) {
+            const textarea = document.getElementById(`${type}_prompt`);
+            const prompt = textarea.value.trim();
+            
+            if (!prompt) {
+                alert('提示语不能为空');
+                return;
+            }
+
+            try {
+                const response = await fetch('/save-prompt', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                        type: type,
+                        prompt: prompt
+                    })
+                });
+
+                if (response.ok) {
+                    alert('保存成功');
+                    // 更新原始提示语
+                    originalPrompts[type] = prompt;
+                    // 隐藏保存按钮
+                    const saveButton = textarea.parentElement.querySelector('.system-prompt-actions button:not(.reset)');
+                    saveButton.style.display = 'none';
+                } else {
+                    alert('保存失败');
+                }
+            } catch (error) {
+                console.error('保存出错:', error);
+                alert('保存出错');
+            }
+        }
+
+        // 重置系统提示语
+        function resetPrompt(type) {
+            const textarea = document.getElementById(`${type}_prompt`);
+            textarea.value = DEFAULT_PROMPTS[type];
+            // 触发input事件以更新保存按钮状态
+            textarea.dispatchEvent(new Event('input'));
+        }
+
+        // 修改提交聊天消息函数，添加系统提示语
+        async function submitChat(event) {
+            event.preventDefault();
+            const form = event.target;
+            const input = form.querySelector('input[name="message"]');
+            const button = form.querySelector('button');
+            const message = input.value;
+
+            if (!message.trim()) return;
+
+            // 禁用输入和按钮
+            input.disabled = true;
+            button.disabled = true;
+
+            // 显示用户消息
+            appendMessage({
+                role: 'user',
+                content: message
+            });
+
+            let inferenceMessage = null;
+            let executionMessage = null;
+
+            try {
+                // 创建 POST 请求的 EventSource 连接
+                const response = await fetch('/chat/stream', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({ message: message })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                let currentPhase = '推理';
+                let inferenceContent = '';
+                let reasoningContent = '';
+                window.executionContents = {};  // 存储每个AI的执行内容
+
+                while (true) {
+                    const {value, done} = await reader.read();
+                    if (done) break;
+                    
+                    buffer += decoder.decode(value, {stream: true});
+                    const lines = buffer.split('\n');
+                    
+                    // 处理除最后一行外的所有行（最后一行可能不完整）
+                    for (let i = 0; i < lines.length - 1; i++) {
+                        const line = lines[i].trim();
+                        if (!line || !line.startsWith('data: ')) continue;
+                        
+                        const data = line.slice(6);
+                        if (data === '[DONE]') {
+                            // 重置输入框和按钮
+                            input.value = '';
+                            input.disabled = false;
+                            button.disabled = false;
+                            input.focus();
+
+                            // 在流式响应结束后解析markdown
+                            if (inferenceMessage) {
+                                inferenceMessage.innerHTML = marked.parse(`回复：${inferenceContent || ''}\n\n推理过程：${reasoningContent || ''}`);
+                            }
+                            // 解析所有执行AI的内容
+                            for (let [aiNumber, content] of Object.entries(window.executionContents)) {
+                                const executionMsg = document.querySelector(`.execution-message-${aiNumber}`);
+                                if (executionMsg) {
+                                    executionMsg.innerHTML = marked.parse(content);
+                                }
+                            }
+                            continue;
+                        }
+
+                        try {
+                            const jsonData = JSON.parse(data);
+                            
+                            // 检查是否有错误
+                            if (jsonData.error) {
+                                if (inferenceMessage) {
+                                    inferenceMessage.innerHTML = marked.parse(`错误：${jsonData.error}`);
+                                } else {
+                                    appendMessage({
+                                        role: 'assistant',
+                                        content: `错误：${jsonData.error}`
+                                    });
+                                }
+                                return;
+                            }
+
+                            // 处理阶段完成标记
+                            if (jsonData.phase_complete) {
+                                if (jsonData.phase_complete === 'inference' && inferenceMessage) {
+                                    // 推理阶段完成，解析markdown
+                                    inferenceMessage.innerHTML = marked.parse(`回复：${inferenceContent || ''}\n\n推理过程：${reasoningContent || ''}`);
+                                } else if (jsonData.phase_complete === 'execution') {
+                                    // 执行阶段完成，解析markdown
+                                    const aiNumber = jsonData.ai_number;
+                                    if (aiNumber) {
+                                        const executionMsg = document.querySelector(`.execution-message-${aiNumber}`);
+                                        if (executionMsg) {
+                                            executionMsg.innerHTML = marked.parse(window.executionContents[aiNumber] || '');
+                                        }
+                                    }
+                                }
+                                continue;
+                            }
+
+                            // 处理阶段变更
+                            if (jsonData.phase) {
+                                currentPhase = jsonData.phase === 'inference' ? '推理' : '执行';
+                                const modelName = jsonData.model || 'Unknown Model';
+                                
+                                if (currentPhase === '推理') {
+                                    // 创建推理模型的消息气泡
+                                    inferenceMessage = appendMessage({
+                                        role: 'model',
+                                        modelName: modelName,
+                                        content: ''
+                                    }, true, true);
+                                } else if (currentPhase === '执行') {
+                                    // 创建执行模型的消息气泡，为每个AI创建单独的消息
+                                    const aiNumber = jsonData.ai_number;
+                                    if (aiNumber) {
+                                        const executionMessage = appendMessage({
+                                            role: 'model',
+                                            modelName: `${modelName} (AI${aiNumber})`,
+                                            content: ''
+                                        }, true, true);
+                                        executionMessage.classList.add(`execution-message-${aiNumber}`);
+                                        window.executionContents[aiNumber] = '';
+                                    }
+                                }
+                                continue;
+                            }
+
+                            if (jsonData.choices && jsonData.choices[0]) {
+                                const delta = jsonData.choices[0].delta || {};
+                                
+                                // 处理推理模型的响应
+                                if (currentPhase === '推理') {
+                                    if (delta.content) {
+                                        inferenceContent += delta.content;
+                                    }
+                                    if (delta.reasoning_content) {
+                                        reasoningContent += delta.reasoning_content;
+                                    }
+                                    if (inferenceMessage) {
+                                        let displayContent = processInferenceContent(inferenceContent, reasoningContent);
+                                        displayContent = processContent(displayContent);
+                                        inferenceMessage.innerHTML = displayContent;
+                                    }
+                                }
+                                // 处理执行模型的响应
+                                else if (currentPhase === '执行' && delta.content) {
+                                    const aiNumber = jsonData.ai_number;
+                                    if (aiNumber) {
+                                        window.executionContents[aiNumber] = (window.executionContents[aiNumber] || '') + delta.content;
+                                        const executionMsg = document.querySelector(`.execution-message-${aiNumber}`);
+                                        if (executionMsg) {
+                                            let displayContent = processContent(window.executionContents[aiNumber]);
+                                            executionMsg.textContent = displayContent;
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (e) {
+                            console.error('解析JSON时出错:', e, data);
+                        }
+                    }
+                    // 保留最后一行（可能不完整）
+                    buffer = lines[lines.length - 1];
+                }
+
+            } catch (error) {
+                console.error('提交错误:', error);
+                if (inferenceMessage) {
+                    inferenceMessage.textContent = '发送消息时出错：' + error.message;
+                } else {
+                    appendMessage({
+                        role: 'assistant',
+                        content: '发送消息时出错：' + error.message
+                    });
+                }
+                input.disabled = false;
+                button.disabled = false;
+            }
+        }
+
+        // 提交 API 密钥
+        async function submitApiKey(event) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
+
+            try {
+                const response = await fetch('/set-api-key', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const html = await response.text();
+                    document.documentElement.innerHTML = html;
+                } else {
+                    console.error('提交失败');
+                }
+            } catch (error) {
+                console.error('提交出错:', error);
+            }
+        }
+
+        // 提交模型选择
+        async function submitModelSelection(event) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
+
+            try {
+                const response = await fetch('/select-model', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const html = await response.text();
+                    document.documentElement.innerHTML = html;
+                } else {
+                    console.error('提交失败');
+                }
+            } catch (error) {
+                console.error('提交出错:', error);
+            }
+        }
+
+        // 显示模型选择界面
+        function showModelSelection(button) {
+            const form = button.closest('form');
+            const modelInputs = form.querySelector('.model-inputs');
+            const selectedModels = form.querySelector('.selected-models');
+            
+            modelInputs.classList.remove('hidden');
+            selectedModels.classList.add('hidden');
+            
+            // 创建新的提交按钮替换当前按钮
+            const newButton = document.createElement('button');
+            newButton.type = 'submit';
+            newButton.textContent = '确认选择';
+            button.parentNode.replaceChild(newButton, button);
+        }
+    </script>
+</body>
+</html> 
