@@ -131,6 +131,7 @@ python main.py
 ## 使用指南
 
 ### 1. 配置 API 密钥
+在cloud.siliconflow.cn 申请密钥
 - 点击"设置密钥"按钮
 - 输入您的 SiliconFlow API 密钥
 - 系统会自动验证密钥有效性
